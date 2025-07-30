@@ -26,10 +26,11 @@ def make_unique_columns(columns):
         new_cols.append(col)
     return new_cols
 
-def extract_tables_from_pdf(pdf_file):
-    tables = []
+def extract_and_combine_tables_from_pdf(pdf_file):
+    all_rows = []
+    header = None
     with pdfplumber.open(pdf_file) as pdf:
-        for page_number, page in enumerate(pdf.pages, 1):
+        for page in pdf.pages:
             page_tables = page.extract_tables()
             for table in page_tables:
                 # Clean up table: remove empty rows/columns
@@ -38,28 +39,28 @@ def extract_tables_from_pdf(pdf_file):
                     for row in table if any(cell is not None and str(cell).strip() != "" for cell in row)
                 ]
                 if cleaned_table:
-                    tables.append({'page': page_number, 'data': cleaned_table})
-    return tables
+                    if header is None:
+                        header = cleaned_table[0]
+                        all_rows.extend(cleaned_table[1:])
+                    else:
+                        # skip header in subsequent tables
+                        all_rows.extend(cleaned_table[1:])
+    return header, all_rows
 
 if uploaded_file is not None:
     st.info("Extracting tables from your PDF...")
-    tables = extract_tables_from_pdf(uploaded_file)
-    if tables:
-        for idx, table in enumerate(tables):
-            st.write(f"**Table {idx+1} (Page {table['page']})**")
-            # Handle unique column names
-            header_row = table['data'][0]
-            header = make_unique_columns(header_row)
-            df = pd.DataFrame(table['data'][1:], columns=header)
-            st.dataframe(df)
-            # CSV download for each table
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label=f"Download Table {idx+1} as CSV",
-                data=csv,
-                file_name=f'pdf_table_{table["page"]}_{idx+1}.csv',
-                mime='text/csv'
-            )
+    header, all_rows = extract_and_combine_tables_from_pdf(uploaded_file)
+    if header and all_rows:
+        header = make_unique_columns(header)
+        df = pd.DataFrame(all_rows, columns=header)
+        st.dataframe(df)
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Combined Table as CSV",
+            data=csv,
+            file_name='pdf_combined_table.csv',
+            mime='text/csv'
+        )
     else:
         st.warning("No tables were found in the uploaded PDF.")
 
