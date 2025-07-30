@@ -9,6 +9,23 @@ st.title("PDF Table Extractor and CSV Downloader")
 
 uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
 
+def make_unique_columns(columns):
+    """Make column names unique and fill empty or duplicate headers."""
+    seen = {}
+    new_cols = []
+    for idx, col in enumerate(columns):
+        # Replace empty or whitespace-only header with a generic name
+        if not col or str(col).strip() == "":
+            col = f"Column_{idx+1}"
+        # Make duplicate columns unique
+        if col in seen:
+            seen[col] += 1
+            col = f"{col}_{seen[col]}"
+        else:
+            seen[col] = 1
+        new_cols.append(col)
+    return new_cols
+
 def extract_tables_from_pdf(pdf_file):
     tables = []
     with pdfplumber.open(pdf_file) as pdf:
@@ -30,7 +47,10 @@ if uploaded_file is not None:
     if tables:
         for idx, table in enumerate(tables):
             st.write(f"**Table {idx+1} (Page {table['page']})**")
-            df = pd.DataFrame(table['data'][1:], columns=table['data'][0])
+            # Handle unique column names
+            header_row = table['data'][0]
+            header = make_unique_columns(header_row)
+            df = pd.DataFrame(table['data'][1:], columns=header)
             st.dataframe(df)
             # CSV download for each table
             csv = df.to_csv(index=False).encode('utf-8')
