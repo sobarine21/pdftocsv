@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import pdfplumber
-from io import BytesIO
 
 st.set_page_config(page_title="PDF to Structured Data (CSV)")
 
@@ -25,6 +24,13 @@ def make_unique_columns(columns):
             seen[col] = 1
         new_cols.append(col)
     return new_cols
+
+def normalize_row(row, num_cols):
+    """Ensure row has exactly num_cols elements (pad or truncate)."""
+    if len(row) < num_cols:
+        return row + [None] * (num_cols - len(row))
+    else:
+        return row[:num_cols]
 
 def extract_and_combine_tables_from_pdf(pdf_file):
     all_rows = []
@@ -52,7 +58,9 @@ if uploaded_file is not None:
     header, all_rows = extract_and_combine_tables_from_pdf(uploaded_file)
     if header and all_rows:
         header = make_unique_columns(header)
-        df = pd.DataFrame(all_rows, columns=header)
+        num_cols = len(header)
+        normalized_rows = [normalize_row(row, num_cols) for row in all_rows]
+        df = pd.DataFrame(normalized_rows, columns=header)
         st.dataframe(df)
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button(
